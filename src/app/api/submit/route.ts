@@ -26,10 +26,20 @@ export async function POST(request: Request) {
     const filePath = path.join(tempDir, `${Date.now()}_${file.name}`);
     await writeFile(filePath, buffer);
 
+    const wavPath = filePath.replace('.webm', '.wav');
+    
     const transcription = await new Promise<string>((resolve) => {
-      exec(`python3 src/lib/transcribe_file.py "${filePath}"`, (error, stdout) => {
-        if (error) resolve("");
-        resolve(stdout.trim());
+      // Convert to wav first using ffmpeg
+      exec(`ffmpeg -i "${filePath}" -ar 16000 -ac 1 "${wavPath}"`, (err) => {
+        if (err) {
+          console.error("FFmpeg error:", err);
+          resolve("");
+          return;
+        }
+        exec(`python3 src/lib/transcribe_file.py "${wavPath}"`, (error, stdout) => {
+          if (error) resolve("");
+          resolve(stdout.trim());
+        });
       });
     });
 
