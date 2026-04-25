@@ -49,14 +49,12 @@ export async function POST(request: Request) {
 
     // 2. Handle Logic based on Mode
     const grievances = getGrievances();
+    const userGrievances = grievances.filter(g => g.Raised_By === username);
     
-    if (mode === 'pause') {
-      // Find the last grievance by this user and append with semicolon
-      const userGrievances = grievances.filter(g => g.Raised_By === username);
-      if (userGrievances.length === 0) {
-        return NextResponse.json({ error: 'No existing grievance to pause' }, { status: 400 });
-      }
-      
+    // Auto-switch to 'new' if 'pause' is clicked but no history exists
+    const effectiveMode = (mode === 'pause' && userGrievances.length === 0) ? 'new' : mode;
+
+    if (effectiveMode === 'pause') {
       const lastGrievance = userGrievances[userGrievances.length - 1];
       const updatedDescription = `${lastGrievance.Description}; ${transcription}`;
       

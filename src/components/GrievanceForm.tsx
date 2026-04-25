@@ -17,8 +17,12 @@ export default function GrievanceForm({ username }: { username: string }) {
 
   const startRecording = async () => {
     try {
-      // 1. Request microphone access once
+      // Clear previous bar content when starting a NEW session
+      setFullTranscript("");
+      setLastTranscription("");
+      
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // ... same as before
       
       // 2. Setup MediaRecorder for the actual file
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
@@ -70,26 +74,33 @@ export default function GrievanceForm({ username }: { username: string }) {
     formData.append('username', username);
 
     try {
+      console.log(`Submitting audio in ${mode} mode...`);
       const response = await fetch('/api/submit', {
         method: 'POST',
         body: formData,
       });
       const data = await response.json();
+      
       if (data.success) {
         const officialText = data.text;
+        console.log("Transcription received:", officialText);
         setLastTranscription(officialText);
+        
         setFullTranscript(prev => {
-          if (mode === 'new') return ""; // Clear for new grievance
-          return prev + (prev ? '; ' : '') + officialText;
+          const newContent = prev + (prev ? '; ' : '') + officialText;
+          return newContent;
         });
+
         router.refresh();
-        if (mode === 'new') alert("New grievance created!");
-        else alert("Note added to current grievance!");
+        if (mode === 'new') alert("✅ New grievance created successfully!");
+        else alert("➕ Note added to current grievance!");
       } else {
+        console.error("Submission error:", data.error);
         alert("Error: " + data.error);
       }
     } catch (error) {
-      alert("Submission failed.");
+      console.error("Fetch failed:", error);
+      alert("Submission failed. Check console for details.");
     } finally {
       setIsProcessing(false);
     }
