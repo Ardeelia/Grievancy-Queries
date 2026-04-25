@@ -35,12 +35,10 @@ export default function RootLayout({
               </div>
               <div className="flex items-center gap-4">
                 <Show when="signed-out">
-                  <SignInButton mode="modal">
-                    <button className="text-sm font-medium hover:text-indigo-400 transition-colors">Sign In</button>
-                  </SignInButton>
-                  <SignUpButton mode="modal">
-                    <button className="bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-full text-sm font-semibold transition-all shadow-lg shadow-indigo-500/20 active:scale-95">Sign Up</button>
-                  </SignUpButton>
+                  <div className="flex items-center gap-4">
+                    <SignInButton mode="modal"><span className="text-sm font-medium hover:text-indigo-400 transition-colors cursor-pointer text-white">Sign In</span></SignInButton>
+                    <SignUpButton mode="modal"><span className="bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-full text-sm font-semibold transition-all shadow-lg shadow-indigo-500/20 active:scale-95 cursor-pointer text-white">Sign Up</span></SignUpButton>
+                  </div>
                 </Show>
                 <Show when="signed-in">
                   <UserButton />

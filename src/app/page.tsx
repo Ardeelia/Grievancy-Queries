@@ -31,11 +31,7 @@ export default async function Home() {
           
           <div className="flex flex-wrap justify-center gap-4">
             <Show when="signed-out">
-              <SignInButton mode="modal">
-                <button className="bg-indigo-600 hover:bg-indigo-500 px-8 py-4 rounded-full text-lg font-black text-white shadow-xl shadow-indigo-500/20 hover:-translate-y-1 active:scale-95 transition-all uppercase tracking-widest border-b-4 border-indigo-800">
-                  Sign In to Start
-                </button>
-              </SignInButton>
+              <SignInButton mode="modal"><span className="bg-indigo-600 hover:bg-indigo-500 px-8 py-4 rounded-full text-lg font-black text-white shadow-xl shadow-indigo-500/20 hover:-translate-y-1 active:scale-95 transition-all uppercase tracking-widest border-b-4 border-indigo-800 cursor-pointer block">Sign In to Start</span></SignInButton>
             </Show>
             <Show when="signed-in">
               <Link href="/dashboard" className="bg-indigo-600 hover:bg-indigo-500 px-8 py-4 rounded-full text-lg font-bold transition-all shadow-xl shadow-indigo-500/20 hover:-translate-y-1 active:scale-95">
