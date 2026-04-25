@@ -39,7 +39,7 @@ export default function RootLayout({
                   <SignUpButton mode="modal">Sign Up</SignUpButton>
                 </Show>
                 <Show when="signed-in">
-                  <UserButton afterSignOutUrl="/" />
+                  <UserButton />
                 </Show>
               </div>
             </nav>
