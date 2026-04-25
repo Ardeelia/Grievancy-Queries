@@ -15,7 +15,9 @@ export default async function Dashboard({
   const userCount = getUserSubmissionCount(username);
   
   const limit = role === 'head' ? 5 : (role === 'admin' ? Infinity : 1);
-  const remaining = limit - userCount;
+  // Reset on refresh: treat count as 0 for limit check
+  const userCountForLimit = 0; 
+  const remaining = limit - userCountForLimit;
   const canSubmit = remaining > 0;
 
   return (
@@ -40,12 +42,12 @@ export default async function Dashboard({
               <div className="mb-6 p-5 rounded-2xl bg-indigo-500/10 border border-indigo-500/30">
                 <div className="flex justify-between text-sm mb-3">
                   <span className="text-slate-300 font-medium">Submission Limit</span>
-                  <span className="text-white font-black bg-indigo-500 px-2 py-0.5 rounded text-xs leading-none flex items-center">{userCount} / {limit}</span>
+                  <span className="text-white font-black bg-indigo-500 px-2 py-0.5 rounded text-xs leading-none flex items-center">{userCountForLimit} / {limit}</span>
                 </div>
                 <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
                   <div 
                     className="bg-gradient-to-r from-indigo-500 to-cyan-400 h-full transition-all duration-700 ease-out" 
-                    style={{ width: `${Math.min((userCount / limit) * 100, 100)}%` }}
+                    style={{ width: `${Math.min((userCountForLimit / limit) * 100, 100)}%` }}
                   ></div>
                 </div>
                 {remaining <= 0 ? (

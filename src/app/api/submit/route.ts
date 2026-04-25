@@ -9,42 +9,43 @@ const CSV_PATH = '/Users/pulkitjindal/Downloads/Cases-Table.csv';
 
 export async function POST(request: Request) {
   try {
-    const formData = await request.formData();
-    const file = formData.get('file') as File;
-    const mode = formData.get('mode') as string; // 'pause' or 'new'
-    const username = formData.get('username') as string;
-    
-    if (!file) {
-      return NextResponse.json({ error: 'No audio file' }, { status: 400 });
-    }
+    const contentType = request.headers.get('content-type') || '';
+    let mode, username, transcription;
 
-    // 1. Save and Transcribe the audio
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const tempDir = path.join(process.cwd(), 'tmp');
-    await mkdir(tempDir, { recursive: true });
-    const filePath = path.join(tempDir, `${Date.now()}_${file.name}`);
-    await writeFile(filePath, buffer);
+    if (contentType.includes('application/json')) {
+      const body = await request.json();
+      mode = body.mode;
+      username = body.username;
+      transcription = body.text;
+    } else {
+      const formData = await request.formData();
+      const file = formData.get('file') as File;
+      mode = formData.get('mode') as string;
+      username = formData.get('username') as string;
+      
+      if (!file) return NextResponse.json({ error: 'No audio' }, { status: 400 });
 
-    const wavPath = filePath.replace('.webm', '.wav');
-    
-    const transcription = await new Promise<string>((resolve) => {
-      // Convert to wav first using ffmpeg
-      exec(`ffmpeg -i "${filePath}" -ar 16000 -ac 1 "${wavPath}"`, (err) => {
-        if (err) {
-          console.error("FFmpeg error:", err);
-          resolve("");
-          return;
-        }
-        exec(`python3 src/lib/transcribe_file.py "${wavPath}"`, (error, stdout) => {
-          if (error) resolve("");
-          resolve(stdout.trim());
+      // Save and transcribe
+      const bytes = await file.arrayBuffer();
+      const buffer = Buffer.from(bytes);
+      const tempDir = path.join(process.cwd(), 'tmp');
+      await mkdir(tempDir, { recursive: true });
+      const filePath = path.join(tempDir, `${Date.now()}_${file.name}`);
+      await writeFile(filePath, buffer);
+      const wavPath = filePath.replace('.webm', '.wav');
+
+      transcription = await new Promise<string>((resolve) => {
+        exec(`ffmpeg -i "${filePath}" -ar 16000 -ac 1 "${wavPath}"`, (err) => {
+          if (err) resolve("");
+          exec(`python3 src/lib/transcribe_file.py "${wavPath}"`, (error, stdout) => {
+            resolve(error ? "" : stdout.trim());
+          });
         });
       });
-    });
+    }
 
     if (!transcription) {
-      return NextResponse.json({ error: 'Could not transcribe audio' }, { status: 400 });
+      return NextResponse.json({ error: 'No text captured' }, { status: 400 });
     }
 
     // 2. Handle Logic based on Mode
