@@ -83,24 +83,27 @@ export default async function Dashboard({
             
             <div className={role === 'admin' ? 'grid grid-cols-1 md:grid-cols-2 gap-6' : 'space-y-4'}>
               {(role === 'admin' ? grievances : grievances.filter(g => g.Raised_By === username)).map((g, i) => (
-                <div key={i} className="p-6 bg-slate-950/40 border border-slate-800 hover:border-indigo-500/50 hover:bg-slate-800/20 transition-all rounded-2xl group relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                  <div className="flex justify-between items-start mb-3">
-                    <span className="text-[10px] font-black tracking-tighter text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-lg border border-indigo-500/20 uppercase">CASE #{g.Case_ID}</span>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{g.Date}</span>
-                  </div>
-                  <h4 className="font-extrabold text-white text-lg mb-2 leading-tight group-hover:text-indigo-300 transition-colors">{g.Description}</h4>
-                  <div className="flex flex-wrap gap-3 text-[11px] font-bold text-slate-400">
-                    <span className="flex items-center gap-1"><span className="text-indigo-500">📍</span> {g.Village_ID}</span>
-                    <span className="flex items-center gap-1"><span className="text-indigo-500">👤</span> {g.Requestor_Details}</span>
-                  </div>
-                  {role === 'admin' && (
-                    <div className="mt-5 pt-4 border-t border-slate-800 flex justify-between items-center">
-                      <span className="text-[11px] text-indigo-400 font-black uppercase tracking-tighter">Raised By: {g.Raised_By}</span>
-                      <button className="text-[10px] font-black bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl transition-all shadow-lg shadow-indigo-900/20 active:scale-95 uppercase tracking-widest">Verify</button>
+                <Link key={i} href={`/grievance/${g.Case_ID}`} className="block">
+                  <div className="p-6 bg-slate-950/40 border border-slate-800 hover:border-indigo-500/50 hover:bg-slate-800/20 transition-all rounded-2xl group relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <div className="flex justify-between items-start mb-3">
+                      <span className="text-[10px] font-black tracking-tighter text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-lg border border-indigo-500/20 uppercase">CASE #{g.Case_ID}</span>
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{g.Date}</span>
                     </div>
-                  )}
-                </div>
+                    <h4 className="font-extrabold text-white text-lg mb-2 leading-tight group-hover:text-indigo-300 transition-colors line-clamp-1">{g.Description.split(';')[0]}</h4>
+                    <div className="flex flex-wrap gap-3 text-[11px] font-bold text-slate-400">
+                      <span className="flex items-center gap-1"><span className="text-indigo-500">📍</span> {g.Village_ID}</span>
+                      <span className="flex items-center gap-1"><span className="text-indigo-500">👤</span> {g.Requestor_Details}</span>
+                      {g.Description.includes(';') && <span className="text-indigo-400 bg-indigo-500/5 px-2 rounded-md border border-indigo-500/10 text-[9px]">+ Multiple Notes</span>}
+                    </div>
+                    {role === 'admin' && (
+                      <div className="mt-5 pt-4 border-t border-slate-800 flex justify-between items-center">
+                        <span className="text-[11px] text-indigo-400 font-black uppercase tracking-tighter">Raised By: {g.Raised_By}</span>
+                        <span className="text-[10px] font-black text-white px-4 py-2 rounded-xl transition-all shadow-lg shadow-indigo-900/20 active:scale-95 uppercase tracking-widest bg-slate-800 group-hover:bg-indigo-600">View File</span>
+                      </div>
+                    )}
+                  </div>
+                </Link>
               ))}
               
               {grievances.length === 0 && (

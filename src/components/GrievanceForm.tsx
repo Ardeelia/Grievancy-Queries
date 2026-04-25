@@ -16,28 +16,41 @@ export default function GrievanceForm({ username }: { username: string }) {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      
+      // Determine supported mime type
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm') 
+        ? 'audio/webm' 
+        : 'audio/mp4';
+        
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
       mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
+        if (event.data && event.data.size > 0) {
           audioChunksRef.current.push(event.data);
         }
       };
 
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+      mediaRecorder.onstop = async () => {
+        if (audioChunksRef.current.length === 0) {
+          alert("No audio data captured. Please try again.");
+          setIsProcessing(false);
+          return;
+        }
+        
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
         if (pendingModeRef.current) {
           handleSubmission(audioBlob, pendingModeRef.current);
           pendingModeRef.current = null;
         }
       };
 
-      mediaRecorder.start();
+      mediaRecorder.start(100); // Capture data every 100ms
       setIsRecording(true);
     } catch (err) {
-      alert("Microphone access denied or not available.");
+      console.error("Mic error:", err);
+      alert("Microphone access denied or not available. Please check permissions.");
     }
   };
 
