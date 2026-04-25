@@ -10,18 +10,20 @@ export default function GrievanceForm({ username }: { username: string }) {
   const [fullTranscript, setFullTranscript] = useState("");
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const recognitionRef = useRef<any>(null);
   const router = useRouter();
 
   const pendingModeRef = useRef<'pause' | 'new' | null>(null);
 
   const startRecording = async () => {
     try {
+      // 1. Request microphone access once
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      // Determine supported mime type
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm') 
-        ? 'audio/webm' 
-        : 'audio/mp4';
+      // 2. Setup MediaRecorder for the actual file
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+        ? 'audio/webm;codecs=opus' 
+        : 'audio/webm';
         
       const mediaRecorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = mediaRecorder;
@@ -34,12 +36,6 @@ export default function GrievanceForm({ username }: { username: string }) {
       };
 
       mediaRecorder.onstop = async () => {
-        if (audioChunksRef.current.length === 0) {
-          alert("No audio data captured. Please try again.");
-          setIsProcessing(false);
-          return;
-        }
-        
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
         if (pendingModeRef.current) {
           handleSubmission(audioBlob, pendingModeRef.current);
@@ -47,19 +43,21 @@ export default function GrievanceForm({ username }: { username: string }) {
         }
       };
 
-      mediaRecorder.start(100); // Capture data every 100ms
+      mediaRecorder.start();
       setIsRecording(true);
     } catch (err) {
       console.error("Mic error:", err);
-      alert("Microphone access denied or not available. Please check permissions.");
+      alert("Microphone Error: Please ensure you have allowed mic access and closed other recording apps.");
     }
   };
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
       setIsRecording(false);
-      // Stop all tracks to release the microphone
       mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
     }
   };
@@ -78,16 +76,15 @@ export default function GrievanceForm({ username }: { username: string }) {
       });
       const data = await response.json();
       if (data.success) {
-        const newText = data.text;
-        setLastTranscription(newText);
-        setFullTranscript(prev => prev + (prev ? '; ' : '') + newText);
+        const officialText = data.text;
+        setLastTranscription(officialText);
+        setFullTranscript(prev => {
+          if (mode === 'new') return ""; // Clear for new grievance
+          return prev + (prev ? '; ' : '') + officialText;
+        });
         router.refresh();
-        if (mode === 'new') {
-          alert("New grievance created!");
-          setFullTranscript(""); // Clear for new grievance
-        } else {
-          alert("Note added to current grievance!");
-        }
+        if (mode === 'new') alert("New grievance created!");
+        else alert("Note added to current grievance!");
       } else {
         alert("Error: " + data.error);
       }
