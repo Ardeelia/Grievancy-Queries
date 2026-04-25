@@ -3,77 +3,105 @@ import { getGrievances, saveGrievance } from '@/lib/data-manager';
 import { exec } from 'child_process';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
-import fs from 'fs';
+import { auth, currentUser } from '@clerk/nextjs/server';
 
-const CSV_PATH = '/Users/pulkitjindal/Downloads/Cases-Table.csv';
+const DATABRICKS_ENDPOINT = process.env.DATABRICKS_ENDPOINT || 'https://your-databricks-instance.com/api/2.0/serving-endpoints/your-endpoint/invocations';
+const DATABRICKS_TOKEN = process.env.DATABRICKS_TOKEN || 'dapi_placeholder_token';
 
 export async function POST(request: Request) {
   try {
-    const contentType = request.headers.get('content-type') || '';
-    let mode, username, transcription;
+    // 1. Get Clerk Session Details
+    const { userId } = await auth();
+    const user = await currentUser();
+    const role = (user?.publicMetadata?.role as string) || 'villager';
 
-    if (contentType.includes('application/json')) {
-      const body = await request.json();
-      mode = body.mode;
-      username = body.username;
-      transcription = body.text;
-    } else {
-      const formData = await request.formData();
-      const file = formData.get('file') as File;
-      mode = formData.get('mode') as string;
-      username = formData.get('username') as string;
-      
-      if (!file) return NextResponse.json({ error: 'No audio' }, { status: 400 });
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-      // Save and transcribe
-      const bytes = await file.arrayBuffer();
-      const buffer = Buffer.from(bytes);
-      const tempDir = path.join(process.cwd(), 'tmp');
-      await mkdir(tempDir, { recursive: true });
-      const filePath = path.join(tempDir, `${Date.now()}_${file.name}`);
-      await writeFile(filePath, buffer);
-      const wavPath = filePath.replace('.webm', '.wav');
+    const formData = await request.formData();
+    const file = formData.get('file') as File;
+    const mode = formData.get('mode') as string;
+    const username = formData.get('username') as string;
+    const sessionId = formData.get('sessionId') as string;
+    const context = formData.get('context') as string;
+    
+    if (!file) return NextResponse.json({ error: 'No audio' }, { status: 400 });
 
-      transcription = await new Promise<string>((resolve) => {
-        exec(`ffmpeg -i "${filePath}" -ar 16000 -ac 1 "${wavPath}"`, (err) => {
-          if (err) resolve("");
-          exec(`python3 src/lib/transcribe_file.py "${wavPath}"`, (error, stdout) => {
-            resolve(error ? "" : stdout.trim());
-          });
+    // Save locally for transcription fallback and logging
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    const tempDir = path.join(process.cwd(), 'tmp');
+    await mkdir(tempDir, { recursive: true });
+    const filePath = path.join(tempDir, `${Date.now()}_${file.name}`);
+    await writeFile(filePath, buffer);
+    const wavPath = filePath.replace('.webm', '.wav');
+
+    // Internal Transcription for local CSV logging
+    const transcription = await new Promise<string>((resolve) => {
+      exec(`ffmpeg -i "${filePath}" -ar 16000 -ac 1 "${wavPath}"`, (err) => {
+        if (err) resolve("");
+        exec(`python3 src/lib/transcribe_file.py "${wavPath}"`, (error, stdout) => {
+          resolve(error ? "" : stdout.trim());
         });
       });
+    });
+
+    // 2. Call Databricks API as per requirements
+    // Note: We use the local transcription if needed, or send the raw audio file to Databricks
+    try {
+      const databricksResponse = await fetch(DATABRICKS_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${DATABRICKS_TOKEN}`,
+          'Content-Type': 'application/json',
+          'X-Clerk-User-Id': userId,
+          'X-User-Role': role,
+        },
+        body: JSON.stringify({
+          inputs: [{
+            audio_base64: buffer.toString('base64'),
+            context: context,
+            user_id: userId,
+            role: role
+          }]
+        })
+      });
+
+      const dbData = await databricksResponse.json();
+      
+      // If Databricks has specific instructions for follow-up
+      if (dbData.status === 'needs_followup') {
+        return NextResponse.json({
+          status: 'needs_followup',
+          native_question: dbData.native_question || "Could you provide more details about this?"
+        });
+      }
+    } catch (err) {
+      console.warn("Databricks connection failed, falling back to local processing.");
     }
 
-    if (!transcription) {
-      return NextResponse.json({ error: 'No text captured' }, { status: 400 });
-    }
-
-    // 2. Handle Logic based on Mode
+    // 3. Local Fallback / Record Keeping
     const grievances = getGrievances();
     const userGrievances = grievances.filter(g => g.Raised_By === username);
-    
-    // Auto-switch to 'new' if 'pause' is clicked but no history exists
     const effectiveMode = (mode === 'pause' && userGrievances.length === 0) ? 'new' : mode;
 
-    if (effectiveMode === 'pause') {
+    if (effectiveMode === 'pause' && userGrievances.length > 0) {
       const lastGrievance = userGrievances[userGrievances.length - 1];
       const updatedDescription = `${lastGrievance.Description}; ${transcription}`;
       
-      // Update the CSV (This is a bit crude but works for the demo)
-      const csvContent = fs.readFileSync(CSV_PATH, 'utf-8').split('\n');
-      for (let i = 0; i < csvContent.length; i++) {
-        if (csvContent[i].startsWith(lastGrievance.Case_ID + ',')) {
-          const parts = csvContent[i].split(',');
-          parts[6] = updatedDescription; // Description column
-          csvContent[i] = parts.join(',');
-          break;
-        }
+      const allGrievances = getGrievances();
+      const idx = allGrievances.findIndex(g => g.Case_ID === lastGrievance.Case_ID);
+      if (idx !== -1) {
+        allGrievances[idx].Description = updatedDescription;
+        const headers = "Case_ID,State_ID,District_ID,Village_ID,Date,Type,Description,Requestor_Details,Raised_By,Session_ID";
+        const rows = allGrievances.map(g => [
+          g.Case_ID, g.State_ID, g.District_ID, g.Village_ID, g.Date, g.Type, g.Description, g.Requestor_Details, g.Raised_By, g.Session_ID || ''
+        ].join(','));
+        const fs = require('fs');
+        fs.writeFileSync('/Users/pulkitjindal/Downloads/Cases-Table.csv', headers + '\n' + rows.join('\n'));
       }
-      fs.writeFileSync(CSV_PATH, csvContent.join('\n'));
-      
-      return NextResponse.json({ success: true, text: transcription, updated: true });
     } else {
-      // Create a NEW grievance
       saveGrievance({
         State_ID: 'MH',
         District_ID: 'Pune',
@@ -81,14 +109,21 @@ export async function POST(request: Request) {
         Type: 'Grievance',
         Description: transcription,
         Requestor_Details: username,
-        Raised_By: username
+        Raised_By: username,
+        Session_ID: sessionId
       });
-      
-      return NextResponse.json({ success: true, text: transcription, updated: false });
     }
+
+    const updated = getGrievances();
+    return NextResponse.json({ 
+      status: 'success',
+      success: true, 
+      text: transcription, 
+      grievances: updated 
+    });
 
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
 }
