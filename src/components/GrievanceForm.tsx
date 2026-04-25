@@ -11,40 +11,50 @@ export default function GrievanceForm({ username }: { username: string }) {
   const audioChunksRef = useRef<Blob[]>([]);
   const router = useRouter();
 
+  const pendingModeRef = useRef<'pause' | 'new' | null>(null);
+
   const startRecording = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mediaRecorder = new MediaRecorder(stream);
-    mediaRecorderRef.current = mediaRecorder;
-    audioChunksRef.current = [];
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
 
-    mediaRecorder.ondataavailable = (event) => {
-      audioChunksRef.current.push(event.data);
-    };
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
 
-    mediaRecorder.onstop = () => {
-      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
-      // We don't submit yet, we wait for the user to click one of the two buttons
-      handleSubmission(audioBlob);
-    };
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        if (pendingModeRef.current) {
+          handleSubmission(audioBlob, pendingModeRef.current);
+          pendingModeRef.current = null;
+        }
+      };
 
-    mediaRecorder.start();
-    setIsRecording(true);
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      alert("Microphone access denied or not available.");
+    }
   };
 
   const stopRecording = () => {
-    mediaRecorderRef.current?.stop();
-    setIsRecording(false);
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      // Stop all tracks to release the microphone
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+    }
   };
 
-  const [pendingMode, setPendingMode] = useState<'pause' | 'new' | null>(null);
-
-  const handleSubmission = async (blob: Blob) => {
-    if (!pendingMode) return;
-
+  const handleSubmission = async (blob: Blob, mode: 'pause' | 'new') => {
     setIsProcessing(true);
     const formData = new FormData();
-    formData.append('file', blob, 'recording.wav');
-    formData.append('mode', pendingMode);
+    formData.append('file', blob, 'recording.webm');
+    formData.append('mode', mode);
     formData.append('username', username);
 
     try {
@@ -56,7 +66,7 @@ export default function GrievanceForm({ username }: { username: string }) {
       if (data.success) {
         setLastTranscription(data.text);
         router.refresh();
-        if (pendingMode === 'new') alert("New grievance created!");
+        if (mode === 'new') alert("New grievance created!");
         else alert("Note added to current grievance with semicolon (;)");
       } else {
         alert("Error: " + data.error);
@@ -65,16 +75,15 @@ export default function GrievanceForm({ username }: { username: string }) {
       alert("Submission failed.");
     } finally {
       setIsProcessing(false);
-      setPendingMode(null);
     }
   };
 
   const triggerAction = (mode: 'pause' | 'new') => {
     if (isRecording) {
-      setPendingMode(mode);
+      pendingModeRef.current = mode;
       stopRecording();
     } else {
-      alert("Please record something first!");
+      alert("Click the microphone to record your voice first!");
     }
   };
 
