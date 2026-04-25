@@ -7,6 +7,7 @@ export default function GrievanceForm({ username }: { username: string }) {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastTranscription, setLastTranscription] = useState("");
+  const [fullTranscript, setFullTranscript] = useState("");
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const router = useRouter();
@@ -77,10 +78,16 @@ export default function GrievanceForm({ username }: { username: string }) {
       });
       const data = await response.json();
       if (data.success) {
-        setLastTranscription(data.text);
+        const newText = data.text;
+        setLastTranscription(newText);
+        setFullTranscript(prev => prev + (prev ? '; ' : '') + newText);
         router.refresh();
-        if (mode === 'new') alert("New grievance created!");
-        else alert("Note added to current grievance with semicolon (;)");
+        if (mode === 'new') {
+          alert("New grievance created!");
+          setFullTranscript(""); // Clear for new grievance
+        } else {
+          alert("Note added to current grievance!");
+        }
       } else {
         alert("Error: " + data.error);
       }
@@ -118,12 +125,22 @@ export default function GrievanceForm({ username }: { username: string }) {
         </div>
       </div>
 
-      {lastTranscription && (
-        <div className="p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl">
-          <p className="text-[10px] font-bold text-indigo-400 uppercase mb-1">Last Transcribed Text:</p>
-          <p className="text-xs text-white italic">"{lastTranscription}"</p>
+      <div className="space-y-2">
+        <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest">Live Transcription Bar 📋</label>
+        <div className="bg-slate-950 border-2 border-slate-800 rounded-2xl p-5 min-h-[100px] shadow-inner">
+          {fullTranscript ? (
+            <p className="text-slate-100 text-sm leading-relaxed font-medium">
+              {fullTranscript.split('; ').map((text, i) => (
+                <span key={i} className="block mb-2 last:mb-0">
+                  <span className="text-indigo-400 font-bold mr-2">Note {i+1}:</span> {text}
+                </span>
+              ))}
+            </p>
+          ) : (
+            <p className="text-slate-600 text-xs italic text-center mt-6">Nothing recorded yet. Start speaking to see text here...</p>
+          )}
         </div>
-      )}
+      </div>
 
       <div className="grid grid-cols-2 gap-4">
         <button 
